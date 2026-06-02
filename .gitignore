@@ -1,0 +1,20 @@
+# PyInstaller build artifacts
+dist/
+build/
+*.spec
+
+# Python cache files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# User settings and sensitive files
+settings.json
+zuvio_bot.log
+zuvio.log
+*.log
+
+# Editor configurations
+.vscode/
+.idea/
