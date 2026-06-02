@@ -5,7 +5,7 @@
 [![GUI](https://img.shields.io/badge/UI-CustomTkinter-orange.svg)](https://github.com/TomSchimansky/CustomTkinter)
 [![License](https://img.shields.io/badge/License-MIT-purple.svg)](LICENSE)
 
-![Zuvio Bot GUI Screenshot](assets/screenshot.png)
+![Zuvio Bot GUI Screenshot](assets/app_screenshot.png)
 
 本專案是一款專為 Zuvio 點名系統設計的自動簽到助手。支援**現代化 GUI 圖形介面**與**輕量 CLI 終端機模式**，採用多執行緒設計與強健的瀏覽器自動化技術，並支援 GPS 定位模擬與 Telegram 即時通知。非常適合放入求職履歷中，展現 Python 軟體開發、GUI 設計與自動化測試的整合實力。
 
