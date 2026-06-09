@@ -51,7 +51,20 @@ pip install -r requirements.txt
 
 ## 🚀 執行與使用方式
 
-### 1. GUI 介面模式 (預設)
+### 📥 快速下載與使用 (給一般使用者)
+
+如果你不會寫程式，可以直接下載打包好的執行檔 (Windows 專用)：
+1. 到 [Releases 頁面](https://github.com/Demohu/zuvio-rollcall-bot/releases) 下載最新的 `Zuvio.exe`。
+2. 將 `Zuvio.exe` 放在一個專屬資料夾 (例如桌面新增一個 `Zuvio 自動點名` 資料夾)。
+3. 直接雙擊執行 `Zuvio.exe`。
+4. 在圖形介面輸入帳號密碼，設定好上課時間後，按下 **「▶ 開始自動點名」** 即可放在背景執行！
+*(註：第一次執行時會自動於同目錄產生 `settings.json` 與相關日誌檔，請勿直接在壓縮檔內執行。)*
+
+---
+
+### 💻 從原始碼執行 (開發者模式)
+
+#### 1. GUI 介面模式 (預設)
 
 直接執行 `Zuvio.py`：
 
