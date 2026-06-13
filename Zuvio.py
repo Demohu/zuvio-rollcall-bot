@@ -7,6 +7,7 @@ import time
 import traceback
 import json
 import urllib.request
+import ssl
 import queue
 import threading
 import argparse
@@ -91,7 +92,8 @@ def send_telegram(bot_token: str, chat_id: str, message: str) -> bool:
             headers={"Content-Type": "application/json"},
             method="POST",
         )
-        with urllib.request.urlopen(req, timeout=10) as resp:
+        context = ssl._create_unverified_context()
+        with urllib.request.urlopen(req, timeout=10, context=context) as resp:
             result = json.loads(resp.read().decode())
             return result.get("ok", False)
     except Exception as e:
@@ -685,7 +687,7 @@ class ZuvioGUI(GUI_BASE_CLASS):
         
         self.subtitle_label = ctk.CTkLabel(
             self.header_frame, 
-            text="v1.1 Stable", 
+            text="v1.2 Stable", 
             font=ctk.CTkFont(size=12), 
             text_color="grey"
         )
