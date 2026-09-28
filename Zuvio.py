@@ -249,7 +249,8 @@ class ZuvioBot:
         self.default_location = None
         self.current_location = None
         self.course_gps = {}
-        
+        self.invalid_gps_warned = set()
+
         # 執行緒與 GUI 控制變數
         self.stop_event  = threading.Event()
         self.status_cb   = None
@@ -286,10 +287,14 @@ class ZuvioBot:
             try:
                 location = parse_gps(gps_str)
             except ValueError as e:
-                log(
-                    f"[GPS] {course_name} 的專屬座標無效，改用全域設定。原因: {e}",
-                    level='warning'
-                )
+                # 同一組無效座標只警告一次，避免每輪掃描洗版日誌
+                warn_key = (course_id, gps_str)
+                if warn_key not in self.invalid_gps_warned:
+                    self.invalid_gps_warned.add(warn_key)
+                    log(
+                        f"[GPS] {course_name} 的專屬座標無效，改用全域設定。原因: {e}",
+                        level='warning'
+                    )
 
         if location == self.current_location:
             return
