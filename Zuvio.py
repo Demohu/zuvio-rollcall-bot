@@ -249,7 +249,8 @@ class ZuvioBot:
         self.default_location = None
         self.current_location = None
         self.course_gps = {}
-        
+        self.invalid_gps_warned = set()
+
         # 執行緒與 GUI 控制變數
         self.stop_event  = threading.Event()
         self.status_cb   = None
@@ -286,10 +287,14 @@ class ZuvioBot:
             try:
                 location = parse_gps(gps_str)
             except ValueError as e:
-                log(
-                    f"[GPS] {course_name} 的專屬座標無效，改用全域設定。原因: {e}",
-                    level='warning'
-                )
+                # 同一組無效座標只警告一次，避免每輪掃描洗版日誌
+                warn_key = (course_id, gps_str)
+                if warn_key not in self.invalid_gps_warned:
+                    self.invalid_gps_warned.add(warn_key)
+                    log(
+                        f"[GPS] {course_name} 的專屬座標無效，改用全域設定。原因: {e}",
+                        level='warning'
+                    )
 
         if location == self.current_location:
             return
@@ -1106,9 +1111,22 @@ class ZuvioGUI(GUI_BASE_CLASS):
         except Exception as e:
             log(f"[設定] 儲存選取課程失敗: {e}", level='warning')
 
+    def flush_course_gps_edits(self):
+        """將尚未按 Enter / 移開焦點的課程 GPS 輸入寫回設定。"""
+        for course_id in list(getattr(self, 'course_gps_vars', {})):
+            self.on_course_gps_changed(course_id)
+
     def on_course_gps_changed(self, course_id):
-        gps_str = self.course_gps_vars[course_id].get().strip()
+        try:
+            gps_str = self.course_gps_vars[course_id].get().strip()
+        except (KeyError, tk.TclError):
+            # 元件已銷毀（重新載入課程或關閉視窗時）
+            return
         previous_value = self.bot.course_gps.get(course_id, '')
+
+        # 內容沒變就不重寫設定檔
+        if gps_str == previous_value:
+            return
 
         if gps_str:
             try:
@@ -1190,6 +1208,7 @@ class ZuvioGUI(GUI_BASE_CLASS):
         self.on_bot_status_change("🔴 已停止")
 
     def stop_bot(self):
+        self.flush_course_gps_edits()
         log("\n🛑 正在接收中斷訊號，停止運行中...")
         self.status_var.set("🟡 停止中...")
         self.on_bot_status_change("🟡 停止中...")
@@ -1197,6 +1216,7 @@ class ZuvioGUI(GUI_BASE_CLASS):
         self.bot.stop_event.set()
 
     def on_closing(self):
+        self.flush_course_gps_edits()
         if self.stop_btn.cget("state") == "normal":
             if messagebox.askokcancel("關閉程式", "Zuvio 點名助手正在運行中，確定要結束程式嗎？"):
                 self.bot.stop_event.set()

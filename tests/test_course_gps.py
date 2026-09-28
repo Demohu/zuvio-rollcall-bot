@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch
 
 from Zuvio import ZuvioBot, normalize_course_gps
 
@@ -83,6 +84,18 @@ class CourseGpsTests(unittest.TestCase):
                 'accuracy': 100
             })
         )
+
+    def test_invalid_course_location_warns_only_once(self):
+        self.bot.default_location = (25.0, 121.0)
+        self.bot.current_location = self.bot.default_location
+        self.bot.course_gps = {'course-1': 'not-a-coordinate'}
+
+        with patch('Zuvio.log') as mock_log:
+            for _ in range(3):
+                self.bot.apply_course_location('course-1', 'Course 1')
+
+        self.assertEqual(mock_log.call_count, 1)
+        self.assertEqual(self.driver.commands, [])
 
     def test_course_gps_config_is_normalized(self):
         self.assertEqual(normalize_course_gps(None), {})
