@@ -152,6 +152,18 @@ def parse_gps(gps_str: str):
     raise ValueError("無法解析 GPS 格式")
 
 
+def normalize_course_gps(value) -> dict:
+    """將設定檔中的課程 GPS 正規化為非空字串映射。"""
+    if not isinstance(value, dict):
+        return {}
+
+    return {
+        str(course_id): gps_str.strip()
+        for course_id, gps_str in value.items()
+        if isinstance(gps_str, str) and gps_str.strip()
+    }
+
+
 # ──────────────────────────────────────────────
 # [4] 瀏覽器工廠
 # ──────────────────────────────────────────────
@@ -234,6 +246,9 @@ class ZuvioBot:
         self.wait        = None
         self.active_start = 8
         self.active_end   = 18
+        self.default_location = None
+        self.current_location = None
+        self.course_gps = {}
         
         # 執行緒與 GUI 控制變數
         self.stop_event  = threading.Event()
@@ -254,9 +269,41 @@ class ZuvioBot:
             except Exception as e:
                 log(f"[驅動] GPS 座標解析失敗，將使用系統預設位置。原因: {e}", level='warning')
 
+        self.default_location = (lat, lon) if lat is not None and lon is not None else None
+        self.current_location = self.default_location
+        self.course_gps = cfg.get('course_gps', {})
         self.driver = build_driver(lat, lon)
         self.wait   = WebDriverWait(self.driver, 20)
         log("[驅動] Chrome 啟動完成。")
+
+    def apply_course_location(self, course_id: str, course_name: str):
+        """套用課程專屬定位；未設定時回退到全域定位或系統定位。"""
+        location = self.default_location
+        gps_value = self.course_gps.get(course_id, '')
+        gps_str = gps_value.strip() if isinstance(gps_value, str) else ''
+
+        if gps_str:
+            try:
+                location = parse_gps(gps_str)
+            except ValueError as e:
+                log(
+                    f"[GPS] {course_name} 的專屬座標無效，改用全域設定。原因: {e}",
+                    level='warning'
+                )
+
+        if location == self.current_location:
+            return
+
+        if location is None:
+            self.driver.execute_cdp_cmd("Emulation.clearGeolocationOverride", {})
+        else:
+            lat, lon = location
+            self.driver.execute_cdp_cmd("Emulation.setGeolocationOverride", {
+                "latitude": lat,
+                "longitude": lon,
+                "accuracy": 100
+            })
+        self.current_location = location
 
     def stop_driver(self):
         """安全關閉 driver 並釋放資源。"""
@@ -322,6 +369,10 @@ class ZuvioBot:
                     cfg['active_start'] = 8
                 if 'active_end' not in cfg:
                     cfg['active_end'] = 18
+                raw_course_gps = cfg.get('course_gps', {})
+                cfg['course_gps'] = normalize_course_gps(raw_course_gps)
+                if raw_course_gps != cfg['course_gps']:
+                    log("[設定] course_gps 已正規化，格式無效的項目已忽略。", level='warning')
                 return cfg
             except Exception:
                 pass
@@ -481,6 +532,7 @@ class ZuvioBot:
                     continue
 
                 try:
+                    self.apply_course_location(c_id, c_name)
                     self.driver.get(URI.format(c_id))
 
                     if "簽到開放中" not in self.driver.page_source:
@@ -584,6 +636,7 @@ class ZuvioBot:
                 self.update_status("🔵 載入課程清單...")
                 course_list = self.get_courses()
                 self.monitored_course_ids = cfg.get('monitored_courses', None)
+                self.course_gps = cfg.get('course_gps', {})
                 self.update_courses(course_list)
                 
             except Exception as e:
@@ -661,7 +714,7 @@ class ZuvioGUI(GUI_BASE_CLASS):
         
         # 註冊 Bot 的狀態與課程回呼
         self.bot.status_cb = self.on_bot_status_change
-        self.bot.courses_cb = self.on_bot_courses_loaded
+        self.bot.courses_cb = lambda courses: self.after(0, self.on_bot_courses_loaded, courses)
         
         # 建立 UI 元件
         self.create_widgets()
@@ -998,8 +1051,9 @@ class ZuvioGUI(GUI_BASE_CLASS):
             lbl.pack(pady=15)
             return
             
-        # 用於儲存核取方塊對應變數的字典
+        # 用於儲存核取方塊與課程 GPS 對應變數的字典
         self.course_checkboxes = {}
+        self.course_gps_vars = {}
         
         # 若 bot.monitored_course_ids 為空或尚未設定，預設全選
         if self.bot.monitored_course_ids is None:
@@ -1007,16 +1061,32 @@ class ZuvioGUI(GUI_BASE_CLASS):
             
         for c_id, c_name in courses.items():
             var = tk.BooleanVar(value=(c_id in self.bot.monitored_course_ids))
-            
+            gps_var = tk.StringVar(value=self.bot.course_gps.get(c_id, ''))
+
+            row = ctk.CTkFrame(self.courses_frame, fg_color="transparent")
+            row.pack(fill="x", padx=10, pady=4)
+
             chk = ctk.CTkCheckBox(
-                self.courses_frame, 
+                row,
                 text=f"{c_name}", 
                 variable=var,
                 font=ctk.CTkFont(size=12),
                 command=self.on_course_check_toggled
             )
-            chk.pack(anchor="w", padx=15, pady=4)
+            chk.pack(side="left", padx=(5, 10))
+
+            gps_entry = ctk.CTkEntry(
+                row,
+                textvariable=gps_var,
+                placeholder_text="專屬 GPS（空白 = 全域）",
+                width=220
+            )
+            gps_entry.pack(side="right", fill="x", expand=True)
+            gps_entry.bind("<FocusOut>", lambda event, course_id=c_id: self.on_course_gps_changed(course_id))
+            gps_entry.bind("<Return>", lambda event, course_id=c_id: self.on_course_gps_changed(course_id))
+
             self.course_checkboxes[c_id] = var
+            self.course_gps_vars[c_id] = gps_var
 
     def on_course_check_toggled(self):
         checked_ids = []
@@ -1035,6 +1105,33 @@ class ZuvioGUI(GUI_BASE_CLASS):
                 json.dump(cfg, f, ensure_ascii=False, indent=2)
         except Exception as e:
             log(f"[設定] 儲存選取課程失敗: {e}", level='warning')
+
+    def on_course_gps_changed(self, course_id):
+        gps_str = self.course_gps_vars[course_id].get().strip()
+        previous_value = self.bot.course_gps.get(course_id, '')
+
+        if gps_str:
+            try:
+                parse_gps(gps_str)
+            except ValueError as e:
+                self.course_gps_vars[course_id].set(previous_value)
+                messagebox.showerror("設定錯誤", f"課程 GPS 座標格式無效！\n{e}")
+                return
+
+        course_gps = dict(self.bot.course_gps)
+        if gps_str:
+            course_gps[course_id] = gps_str
+        else:
+            course_gps.pop(course_id, None)
+        self.bot.course_gps = course_gps
+
+        try:
+            cfg = self.bot.load_config()
+            cfg['course_gps'] = course_gps
+            with open(self.bot.config_file, 'w', encoding='utf-8') as f:
+                json.dump(cfg, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            log(f"[設定] 儲存課程 GPS 失敗: {e}", level='warning')
 
     def start_bot(self):
         # 自動存檔，確保背景執行緒讀到最新畫面輸入（不跳出成功提示）

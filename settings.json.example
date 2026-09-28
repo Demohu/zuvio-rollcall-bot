@@ -1,0 +1,19 @@
+{
+  "user": "student@example.com",
+  "pass": "replace-with-your-password",
+  "active_start": 8,
+  "active_end": 18,
+  "tg_token": "",
+  "tg_chat_id": "",
+  "tg_enabled": false,
+  "gps_enabled": true,
+  "gps_str": "25.0218, 121.4633",
+  "monitored_courses": [
+    "123456",
+    "789012"
+  ],
+  "course_gps": {
+    "123456": "25.0330, 121.5654",
+    "789012": "25°01'18.6\"N 121°27'48.2\"E"
+  }
+}
